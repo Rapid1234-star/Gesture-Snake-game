@@ -18,6 +18,8 @@ class SnakeGameClass:
         self.currentLength = 0
         self.allowedLength = 150
         self.previousHead = (640, 360)
+        self.smoothHead = (640.0, 360.0)
+        self.smoothingFactor = 0.3  # Tune this: lower = smoother/less jittery, higher = more responsive (0.1-0.5 good)
         self.score = 0
         self.gameOver = False
         self.paused = False
@@ -33,13 +35,22 @@ class SnakeGameClass:
         self.foodpoint = random.randint(100, 1100), random.randint(100, 600)
 
     def update(self, imgMain, currentHead):
-        cx, cy = currentHead
+        cx, cy = currentHead  # Raw input (floats OK)
+
+        # ALWAYS smooth the head position first (handles jitter beautifully)
+        smoothX = self.smoothingFactor * cx + (1 - self.smoothingFactor) * self.smoothHead[0]
+        smoothY = self.smoothingFactor * cy + (1 - self.smoothingFactor) * self.smoothHead[1]
+        self.smoothHead = (smoothX, smoothY)
+        cx = round(smoothX)
+        cy = round(smoothY)
 
         if self.gameOver:
             cvzone.putTextRect(imgMain, "Game Over", (300, 400), scale=7,
                                thickness=5, colorR=(0, 0, 255), colorT=(255, 255, 255))
             cvzone.putTextRect(imgMain, f"Score: {self.score}", (500, 550), scale=5,
                                thickness=5, colorR=(0, 0, 255), colorT=(255, 255, 255))
+            cvzone.putTextRect(imgMain, "Press R to Restart", (400, 650), scale=3,
+                               thickness=3, colorR=(0, 0, 255), colorT=(255, 255, 255))
             return imgMain
 
         if self.paused:
@@ -47,7 +58,8 @@ class SnakeGameClass:
                                thickness=5, colorR=(50, 50, 50))
             cvzone.putTextRect(imgMain, "Press P to Resume", (420, 380),
                                scale=3, thickness=3)
-            self.previousHead = (cx, cy)
+            self.previousHead = (cx, cy)  # Track smoothed pos while paused
+            # Snake drawing/UI below
         else:
             px, py = self.previousHead
             self.points.append([cx, cy])
@@ -56,42 +68,41 @@ class SnakeGameClass:
             self.currentLength += distance
             self.previousHead = (cx, cy)
 
+            # Trim tail
             while self.currentLength > self.allowedLength and self.lengths:
                 self.currentLength -= self.lengths.pop(0)
                 self.points.pop(0)
 
-            # Check for food
-            rx, ry = self.foodpoint
-            food_radius = max(self.wFood, self.hFood) // 2 + 15
-            if (rx - food_radius < cx < rx + food_radius and
-                ry - food_radius < cy < ry + food_radius):
-                self.randomFoodLocation()
-                self.allowedLength += 50
-                self.score += 1
+            # Wall collision (with padding)
+            if cx < 30 or cx > 1250 or cy < 30 or cy > 690:
+                print("Hit the wall! Game Over!")
+                self.gameOver = True
 
-            # Check for collision
-            if len(self.points) > 36:
-                head = np.array([cx, cy])
-                
-                
-                for point in self.points[10:25]:
-                    body_point = np.array(point)
-                    dist = np.linalg.norm(head - body_point)
-                    if dist < 22:  
-                        print("Head touched body! Game Over!")
-                        self.gameOver = True
-                        break
-                
-                if not self.gameOver:
-                    for point in self.points[32:-10]:
-                        body_point = np.array(point)
-                        dist = np.linalg.norm(head - body_point)
-                        if dist < 28:
-                            print("Game Over!")
+            # Food check
+            if not self.gameOver:
+                rx, ry = self.foodpoint
+                food_radius = max(self.wFood, self.hFood) // 2 + 15
+                if (rx - food_radius < cx < rx + food_radius and
+                    ry - food_radius < cy < ry + food_radius):
+                    self.randomFoodLocation()
+                    self.allowedLength += 50
+                    self.score += 1
+
+            # Self-collision (improved: uniform distance, skips recent neck points)
+            if not self.gameOver and len(self.points) > 15:
+                head_np = np.array([cx, cy])
+                COLLISION_DIST = 28
+                SKIP_RECENT = 12  # Skip last 12 points (neck/tail curve allowance)
+                num_points_to_check = len(self.points) - SKIP_RECENT
+                if num_points_to_check > 0:
+                    for i in range(num_points_to_check):
+                        body_np = np.array(self.points[i])
+                        if np.linalg.norm(head_np - body_np) < COLLISION_DIST:
+                            print("Self-collision! Game Over!")
                             self.gameOver = True
                             break
 
-        # Snake Draw
+        # Snake Draw (same beautiful code)
         if self.points:
             total = len(self.points)
             for i in range(1, total):
@@ -112,7 +123,7 @@ class SnakeGameClass:
             else:
                 ux, uy = 1.0, 0.0
 
-            px, py = -uy, ux
+            px_snake, py_snake = -uy, ux  # renamed to avoid conflict
 
             head_center = (int(head[0]), int(head[1]))
             major, minor = 32, 24
@@ -122,10 +133,10 @@ class SnakeGameClass:
 
             eye_offset = 10
             forward_offset = 4
-            ex1 = int(head_center[0] + px * eye_offset + ux * forward_offset)
-            ey1 = int(head_center[1] + py * eye_offset + uy * forward_offset)
-            ex2 = int(head_center[0] - px * eye_offset + ux * forward_offset)
-            ey2 = int(head_center[1] - py * eye_offset + uy * forward_offset)
+            ex1 = int(head_center[0] + px_snake * eye_offset + ux * forward_offset)
+            ey1 = int(head_center[1] + py_snake * eye_offset + uy * forward_offset)
+            ex2 = int(head_center[0] - px_snake * eye_offset + ux * forward_offset)
+            ey2 = int(head_center[1] - py_snake * eye_offset + uy * forward_offset)
             cv2.circle(imgMain, (ex1, ey1), 6, (255, 255, 255), cv2.FILLED)
             cv2.circle(imgMain, (ex2, ey2), 6, (255, 255, 255), cv2.FILLED)
             pupil_forward = 3
@@ -137,8 +148,8 @@ class SnakeGameClass:
             tip_len = 14
             fork = 6
             tip = (int(mouth_x + ux * tip_len), int(mouth_y + uy * tip_len))
-            left_tip = (int(mouth_x + ux * (tip_len - 6) + px * fork), int(mouth_y + uy * (tip_len - 6) + py * fork))
-            right_tip = (int(mouth_x + ux * (tip_len - 6) - px * fork), int(mouth_y + uy * (tip_len - 6) - py * fork))
+            left_tip = (int(mouth_x + ux * (tip_len - 6) + px_snake * fork), int(mouth_y + uy * (tip_len - 6) + py_snake * fork))
+            right_tip = (int(mouth_x + ux * (tip_len - 6) - px_snake * fork), int(mouth_y + uy * (tip_len - 6) - py_snake * fork))
             cv2.line(imgMain, (mouth_x, mouth_y), tip, (0, 0, 255), 2)
             cv2.line(imgMain, tip, left_tip, (0, 0, 255), 2)
             cv2.line(imgMain, tip, right_tip, (0, 0, 255), 2)
@@ -153,6 +164,8 @@ class SnakeGameClass:
                            thickness=3, colorR=(0, 0, 0), colorT=(255, 255, 255))
         cvzone.putTextRect(imgMain, "P - Pause | R - Restart", (50, 140),
                            scale=2, thickness=2)
+        cvzone.putTextRect(imgMain, f"Smooth: {self.smoothingFactor}", (50, 200),
+                           scale=1.5, thickness=1)  # For tuning info
 
         return imgMain
 
@@ -162,6 +175,7 @@ class SnakeGameClass:
         self.currentLength = 0
         self.allowedLength = 150
         self.previousHead = (640, 360)
+        self.smoothHead = (640.0, 360.0)
         self.score = 0
         self.gameOver = False
         self.paused = False
@@ -181,8 +195,8 @@ while True:
     if hands:
         lmList = hands[0]['lmList']
         pointindex = lmList[8][0:2]
-        currentHead = pointindex
-        lastHead = pointindex
+        currentHead = tuple(pointindex)  # Keep as floats for smoothing
+        lastHead = currentHead
     else:
         currentHead = lastHead
 
