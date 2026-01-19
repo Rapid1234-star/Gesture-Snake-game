@@ -28,6 +28,7 @@ class SnakeGameClass:
         self.countdownActive = False
         self.countdownStart = 0
         self.countdownValue = 5
+        self.showInstructions = False
 
         # velocity tracking
         self.velocity = [0.0, 0.0]
@@ -94,6 +95,84 @@ class SnakeGameClass:
                          scale=2.2, thickness=3, 
                          colorR=(40, 40, 40), colorT=(255, 100, 100), offset=10)
 
+        # Instructions button
+        cvzone.putTextRect(imgMain, "PRESS  [I]  FOR INSTRUCTIONS", (300, 690), 
+                         scale=2, thickness=3, 
+                         colorR=(40, 40, 40), colorT=(100, 200, 255), offset=10)
+
+    def drawInstructions(self, imgMain):
+        # Dark overlay
+        overlay = imgMain.copy()
+        cv2.rectangle(overlay, (0, 0), (1280, 720), (0, 0, 0), -1)
+        cv2.addWeighted(overlay, 0.85, imgMain, 0.15, 0, imgMain)
+
+        # Title
+        cvzone.putTextRect(imgMain, "HOW TO PLAY", (450, 50), 
+                         scale=4.5, thickness=6, 
+                         colorR=(0, 0, 0), colorT=(0, 255, 150), offset=15)
+
+        # Instructions text
+        instructions = [
+            ("HAND REQUIREMENTS:", True),
+            ("  • Use Right Hand with Index Finger extended", False),
+            ("  • Keep your palm facing the camera", False),
+            ("", False),
+            ("GAME MECHANICS:", True),
+            ("  • Snake follows your INDEX FINGER movement", False),
+            ("  • Continuous movement prevents game over", False),
+            ("  • Stop moving = INSTANT GAME OVER", False),
+            ("", False),
+            ("SCORING:", True),
+            ("  • Collect donuts (food) to increase score", False),
+            ("  • Each donut adds 50 length to the snake", False),
+            ("", False),
+            ("COLLISIONS:", True),
+            ("  • Hitting walls = Game Over", False),
+            ("  • Snake hitting itself = Game Over", False),
+        ]
+
+        y_pos = 100
+        for line, is_header in instructions:
+            if line == "":
+                y_pos += 10
+            elif is_header:
+                cvzone.putTextRect(imgMain, line, (40, y_pos), 
+                                 scale=1.9, thickness=3, 
+                                 colorR=(0, 0, 0), colorT=(255, 200, 0), offset=8)
+                y_pos += 35
+            else:
+                cvzone.putTextRect(imgMain, line, (40, y_pos), 
+                                 scale=1.6, thickness=2, 
+                                 colorR=(0, 0, 0), colorT=(200, 200, 200), offset=6)
+                y_pos += 28
+
+        # Controls section
+        cvzone.putTextRect(imgMain, "CONTROLS:", (40, y_pos), 
+                         scale=1.9, thickness=3, 
+                         colorR=(0, 0, 0), colorT=(255, 200, 0), offset=8)
+        y_pos += 35
+
+        controls = [
+            "[S] Start Game",
+            "[P] Pause/Resume",
+            "[R] Restart",
+            "[I] Instructions",
+            "[ESC] Quit"
+        ]
+
+        for ctrl in controls:
+            cvzone.putTextRect(imgMain, ctrl, (60, y_pos), 
+                             scale=1.6, thickness=2, 
+                             colorR=(0, 0, 0), colorT=(0, 255, 200), offset=6)
+            y_pos += 28
+
+        # Close instruction prompt
+        pulse = abs(math.sin(time.time() * 3)) * 0.3 + 0.7
+        close_color = (int(100 * pulse), int(255 * pulse), int(150 * pulse))
+        cvzone.putTextRect(imgMain, "PRESS  [I]  TO CLOSE", (420, 690), 
+                         scale=2, thickness=3, 
+                         colorR=(0, 0, 0), colorT=close_color, offset=10)
+
     def drawCountdown(self, imgMain):
         elapsed = time.time() - self.countdownStart
         remaining = max(0, self.countdownValue - int(elapsed))
@@ -141,6 +220,10 @@ class SnakeGameClass:
     def update(self, imgMain, currentHead):
         self.drawModernBackground(imgMain)
 
+        if self.showInstructions:
+            self.drawInstructions(imgMain)
+            return imgMain
+
         if not self.gameStarted and not self.countdownActive:
             self.drawStartScreen(imgMain)
             return imgMain
@@ -175,25 +258,48 @@ class SnakeGameClass:
         cy = round(smoothY)
 
         if self.gameOver:
-            # game over screen
+            # game over screen with dark overlay
             overlay = imgMain.copy()
             cv2.rectangle(overlay, (0, 0), (1280, 720), (0, 0, 0), -1)
-            cv2.addWeighted(overlay, 0.8, imgMain, 0.2, 0, imgMain)
+            cv2.addWeighted(overlay, 0.85, imgMain, 0.15, 0, imgMain)
 
-            cvzone.putTextRect(imgMain, "GAME OVER", (280, 250), scale=8,
+            # Game over title with glow effect
+            for glow in range(6, 0, -2):
+                cvzone.putTextRect(imgMain, "GAME OVER", (280 - glow // 2, 150 - glow // 2), scale=8,
+                                 thickness=10, colorR=(0, 0, 0), colorT=(100, 20, 20), offset=25)
+            
+            cvzone.putTextRect(imgMain, "GAME OVER", (280, 150), scale=8,
                              thickness=10, colorR=(0, 0, 0), colorT=(255, 50, 50), offset=25)
             
-            # Score display
-            cvzone.putTextRect(imgMain, f"FINAL SCORE", (450, 400), scale=3,
+            # Decorative line
+            cv2.line(imgMain, (200, 210), (1080, 210), (255, 100, 100), 2)
+
+            # Final score label
+            cvzone.putTextRect(imgMain, "FINAL SCORE", (420, 290), scale=3.5,
                              thickness=4, colorR=(0, 0, 0), colorT=(255, 200, 0), offset=15)
-            cvzone.putTextRect(imgMain, f"{self.score}", (580, 480), scale=6,
-                             thickness=8, colorR=(0, 0, 0), colorT=(0, 255, 200), offset=20)
             
-            # restart prompt
-            pulse = abs(math.sin(time.time() * 4)) * 0.5 + 0.5
-            restart_color = (int(100 * pulse), int(255 * pulse), int(200 * pulse))
-            cvzone.putTextRect(imgMain, "PRESS  [R]  TO RESTART", (320, 620), scale=3,
+            # Score display with glow
+            score_text = f"{self.score}"
+            for glow in range(4, 0, -1):
+                cvzone.putTextRect(imgMain, score_text, (500 - glow // 2, 400 - glow // 2), scale=7,
+                                 thickness=8, colorR=(0, 0, 0), colorT=(0, 100, 100), offset=20)
+            
+            cvzone.putTextRect(imgMain, score_text, (500, 400), scale=7,
+                             thickness=8, colorR=(0, 0, 0), colorT=(0, 255, 200), offset=20)
+
+            # Decorative line
+            cv2.line(imgMain, (200, 470), (1080, 470), (0, 255, 200), 2)
+
+            # Restart prompt with pulsing effect
+            pulse = abs(math.sin(time.time() * 3)) * 0.4 + 0.6
+            restart_color = (int(100 * pulse), int(255 * pulse), int(150 * pulse))
+            cvzone.putTextRect(imgMain, "PRESS  [R]  TO RESTART", (350, 580), scale=3,
                              thickness=4, colorR=(0, 0, 0), colorT=restart_color, offset=15)
+            
+            # Instructions hint
+            cvzone.putTextRect(imgMain, "PRESS  [I]  FOR INSTRUCTIONS", (330, 650), scale=2,
+                             thickness=3, colorR=(0, 0, 0), colorT=(100, 200, 255), offset=10)
+            
             return imgMain
 
         if self.paused:
@@ -379,6 +485,7 @@ print("📌 Controls:")
 print("   [S] - Start Game")
 print("   [P] - Pause/Resume")
 print("   [R] - Restart")
+print("   [I] - Instructions")
 print("   [ESC] - Quit")
 
 while True:
@@ -403,17 +510,21 @@ while True:
 
     # Start game
     if key == ord('s') or key == ord('S'):
-        if not game.gameStarted and not game.countdownActive and not game.gameOver:
+        if not game.gameStarted and not game.countdownActive and not game.gameOver and not game.showInstructions:
             game.startCountdown()
 
     # Pause/Resume
     if key == ord('p') or key == ord('P'):
-        if game.gameStarted and not game.gameOver:
+        if game.gameStarted and not game.gameOver and not game.showInstructions:
             game.paused = not game.paused
 
     # Restart
     if key == ord('r') or key == ord('R'):
         game.reset()
+
+    # Instructions
+    if key == ord('i') or key == ord('I'):
+        game.showInstructions = not game.showInstructions
 
     # Quit
     if key == 27:  # ESC
